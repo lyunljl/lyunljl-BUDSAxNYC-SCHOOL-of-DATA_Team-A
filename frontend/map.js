@@ -192,86 +192,128 @@ function refreshMapColors() {
     updateLegend();
 }
 
-// ── Load GeoJSON + build toolbar ──────────────────────────────────────────────
-fetch('../datasets/final-usables/merged_nyc.geojson')
-    .then(response => response.json())
-    .then(data => {
-        const toolbar = document.getElementById("toolbar");
+// ── Function to switch GeoJSON ──────────────────────────────────────────────
+function loadGeoJSON(url) {
+    console.log('Loading GeoJSON from:', url);
+    fetch(url)
+        .then(response => response.json())
+        .then(data => {
+            // Remove old layer if it exists
+            if (geojson) {
+                map.removeLayer(geojson);
+                highlightedLayer = null;
+            }
 
-        // ── Color-by selector ──
-        const colorBySection = document.createElement("div");
-        colorBySection.className = "toolbar-section";
-        colorBySection.innerHTML = `<div class="toolbar-section-title">Color Map By</div>`;
+            // Add new layer
+            geojson = L.geoJson(data, {
+                style: style,
+                onEachFeature: onEachFeature
+            }).addTo(map);
+        })
+        .catch(err => console.error('Error loading GeoJSON:', err));
+}
 
-        Object.entries(fieldConfig).forEach(([key, cfg]) => {
-            const label = document.createElement("label");
-            label.className = "radio-label";
-            label.innerHTML = `
-                <input type="radio" name="colorBy" value="${key}" ${key === activeColorField ? 'checked' : ''}>
-                ${cfg.label}
-            `;
-            colorBySection.appendChild(label);
-        });
+// ── Toolbar setup ─────────────────────────────────────────────────────────────
+const toolbar = document.getElementById("toolbar");
 
-        toolbar.appendChild(colorBySection);
+// ── Color-by selector ──
+const colorBySection = document.createElement("div");
+colorBySection.className = "toolbar-section";
+colorBySection.innerHTML = `<div class="toolbar-section-title">Color Map By</div>`;
 
-        // Divider
-        const divider = document.createElement("div");
-        divider.className = "toolbar-divider";
-        toolbar.appendChild(divider);
+Object.entries(fieldConfig).forEach(([key, cfg]) => {
+    const label = document.createElement("label");
+    label.className = "radio-label";
+    label.innerHTML = `
+        <input type="radio" name="colorBy" value="${key}" ${key === activeColorField ? 'checked' : ''}>
+        ${cfg.label}
+    `;
+    colorBySection.appendChild(label);
+});
 
-        // ── Tooltip fields ──
-        const tooltipSection = document.createElement("div");
-        tooltipSection.className = "toolbar-section";
-        tooltipSection.innerHTML = `<div class="toolbar-section-title">Show in Tooltip</div>`;
+toolbar.appendChild(colorBySection);
 
-        const selectAllLabel = document.createElement("label");
-        selectAllLabel.className = "checkbox-label";
-        selectAllLabel.innerHTML = `<input type="checkbox" id="selectAll"> <strong>Select All</strong>`;
-        tooltipSection.appendChild(selectAllLabel);
+// Divider
+const divider = document.createElement("div");
+divider.className = "toolbar-divider";
+toolbar.appendChild(divider);
 
-        Object.entries(fieldConfig).forEach(([key, cfg]) => {
-            const label = document.createElement("label");
-            label.className = "checkbox-label";
-            label.innerHTML = `<input type="checkbox" value="${key}"> ${cfg.label}`;
-            tooltipSection.appendChild(label);
-        });
+// ── Tooltip fields ──
+const tooltipSection = document.createElement("div");
+tooltipSection.className = "toolbar-section";
+tooltipSection.innerHTML = `<div class="toolbar-section-title">Show in Tooltip</div>`;
 
-        toolbar.appendChild(tooltipSection);
+const selectAllLabel = document.createElement("label");
+selectAllLabel.className = "checkbox-label";
+selectAllLabel.innerHTML = `<input type="checkbox" id="selectAll"> <strong>Select All</strong>`;
+tooltipSection.appendChild(selectAllLabel);
 
-        // ── Wire up radio buttons ──
-        document.querySelectorAll('input[name="colorBy"]').forEach(radio => {
-            radio.addEventListener('change', () => {
-                activeColorField = radio.value;
-                refreshMapColors();
-            });
-        });
+Object.entries(fieldConfig).forEach(([key, cfg]) => {
+    const label = document.createElement("label");
+    label.className = "checkbox-label";
+    label.innerHTML = `<input type="checkbox" value="${key}"> ${cfg.label}`;
+    tooltipSection.appendChild(label);
+});
 
-        // ── Wire up checkboxes ──
-        const checkboxes = document.querySelectorAll('#toolbar input[type="checkbox"]:not(#selectAll)');
-        const selectAll = document.getElementById("selectAll");
+toolbar.appendChild(tooltipSection);
 
-        checkboxes.forEach(cb => {
-            cb.addEventListener('change', () => {
-                if (cb.checked) selectedFields.add(cb.value);
-                else selectedFields.delete(cb.value);
-                // Keep selectAll in sync
-                selectAll.checked = [...checkboxes].every(c => c.checked);
-            });
-        });
+// ── Wire up radio buttons ──
+document.querySelectorAll('input[name="colorBy"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        activeColorField = radio.value;
+        refreshMapColors();
+    });
+});
 
-        selectAll.addEventListener('change', () => {
-            checkboxes.forEach(cb => {
-                cb.checked = selectAll.checked;
-                if (selectAll.checked) selectedFields.add(cb.value);
-                else selectedFields.delete(cb.value);
-            });
-        });
+// ── Wire up checkboxes ──
+const checkboxes = document.querySelectorAll('#toolbar input[type="checkbox"]:not(#selectAll)');
+const selectAll = document.getElementById("selectAll");
 
-        // ── Render GeoJSON ──
-        geojson = L.geoJson(data, {
-            style: style,
-            onEachFeature: onEachFeature
-        }).addTo(map);
-    })
-    .catch(err => console.error('Error loading GeoJSON:', err));
+checkboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+        if (cb.checked) selectedFields.add(cb.value);
+        else selectedFields.delete(cb.value);
+        // Keep selectAll in sync
+        selectAll.checked = [...checkboxes].every(c => c.checked);
+    });
+});
+
+selectAll.addEventListener('change', () => {
+    checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+        if (selectAll.checked) selectedFields.add(cb.value);
+        else selectedFields.delete(cb.value);
+    });
+});
+
+// ── GeoJSON selector ──
+const geojsonSection = document.createElement("div");
+geojsonSection.className = "toolbar-section";
+geojsonSection.innerHTML = `<div class="toolbar-section-title">Select Region</div>`;
+
+const geojsonFiles = {
+    'Boroughs': '../datasets/final-usables/merged_nyc_county.geojson',
+    'ZIP Codes': '../datasets/final-usables/merged_nyc_zcta.geojson',
+    //'Custom Layer': '../datasets/final-usables/custom_layer.geojson'
+};
+
+Object.entries(geojsonFiles).forEach(([labelText, url], idx) => {
+    const label = document.createElement("label");
+    label.className = "radio-label";
+    label.innerHTML = `
+        <input type="radio" name="geojsonFile" value="${url}" ${idx === 0 ? 'checked' : ''}>
+        ${labelText}
+    `;
+    geojsonSection.appendChild(label);
+});
+
+toolbar.appendChild(geojsonSection);
+
+// ── Wire up GeoJSON radio buttons ──
+document.querySelectorAll('input[name="geojsonFile"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        loadGeoJSON(radio.value);
+    });
+});
+
+loadGeoJSON('../datasets/final-usables/merged_nyc_county.geojson');
