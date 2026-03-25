@@ -5,7 +5,7 @@ let highlightedLayer = null;
 var map = L.map('map', {
     minZoom: 9.5,
     maxZoom: 16
-}).setView([40.700, -74.050], 11);
+})
 
 // Restrict panning/zooming tightly to NYC metro (boroughs + NJ waterfront)
 var bounds = L.latLngBounds(
@@ -13,6 +13,7 @@ var bounds = L.latLngBounds(
     L.latLng(40.95, -73.65)   // NE: northern Bronx / eastern Queens
 );
 map.setMaxBounds(bounds);
+map.fitBounds(bounds);
 map.on('drag', function() {
     map.panInsideBounds(bounds, { animate: false });
 });
