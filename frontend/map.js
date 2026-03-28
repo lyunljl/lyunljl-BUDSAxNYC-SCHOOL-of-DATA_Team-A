@@ -232,6 +232,178 @@ function loadGeoJSON(url) {
 // ── Toolbar setup ─────────────────────────────────────────────────────────────
 const toolbar = document.getElementById("toolbar");
 
+// ── Color Map By Section ──
+const colorBySection = document.createElement("div");
+colorBySection.className = "toolbar-section";
+colorBySection.innerHTML = `<div class="toolbar-section-title">Color Map By</div>`;
+
+Object.entries(fieldConfig).forEach(([key, cfg]) => {
+    const label = document.createElement("label");
+    label.className = "radio-label";
+    label.innerHTML = `
+        <input type="radio" name="colorBy" value="${key}" ${key === activeColorField ? 'checked' : ''}>
+        ${cfg.label}
+    `;
+    colorBySection.appendChild(label);
+});
+
+toolbar.appendChild(colorBySection);
+
+// Divider
+const divider1 = document.createElement("div");
+divider1.className = "toolbar-divider";
+toolbar.appendChild(divider1);
+
+// ── Tooltip Fields Section ──
+const tooltipSection = document.createElement("div");
+tooltipSection.className = "toolbar-section";
+tooltipSection.innerHTML = `<div class="toolbar-section-title">Show in Tooltip</div>`;
+
+// Select All checkbox
+const selectAllLabel = document.createElement("label");
+selectAllLabel.className = "checkbox-label";
+selectAllLabel.innerHTML = `<input type="checkbox" id="selectAll"> <strong>Select All</strong>`;
+tooltipSection.appendChild(selectAllLabel);
+
+// Individual field checkboxes
+Object.entries(fieldConfig).forEach(([key, cfg]) => {
+    const label = document.createElement("label");
+    label.className = "checkbox-label";
+    label.innerHTML = `<input type="checkbox" value="${key}"> ${cfg.label}`;
+    tooltipSection.appendChild(label);
+});
+
+toolbar.appendChild(tooltipSection);
+
+// Divider
+const divider2 = document.createElement("div");
+divider2.className = "toolbar-divider";
+toolbar.appendChild(divider2);
+
+// ── Region Selector Section ──
+const geojsonSection = document.createElement("div");
+geojsonSection.className = "toolbar-section";
+geojsonSection.innerHTML = `<div class="toolbar-section-title">Select Region</div>`;
+
+const geojsonFiles = {
+    'Boroughs': '../datasets/final-usables/merged_nyc_county.geojson',
+    'ZIP Codes': '../datasets/final-usables/merged_nyc_zcta.geojson'
+};
+
+Object.entries(geojsonFiles).forEach(([labelText, url], idx) => {
+    const label = document.createElement("label");
+    label.className = "radio-label";
+    label.innerHTML = `
+        <input type="radio" name="geojsonFile" value="${url}" ${idx === 0 ? 'checked' : ''}>
+        ${labelText}
+    `;
+    geojsonSection.appendChild(label);
+});
+
+toolbar.appendChild(geojsonSection);
+
+// Divider
+const divider3 = document.createElement("div");
+divider3.className = "toolbar-divider";
+toolbar.appendChild(divider3);
+
+// ── Export Section ──
+const exportSection = document.createElement("div");
+exportSection.className = "toolbar-section";
+exportSection.innerHTML = `<div class="toolbar-section-title">Export Data</div>`;
+
+// Export CSV button
+const exportCSVBtn = document.createElement("button");
+exportCSVBtn.textContent = "Export CSV";
+exportCSVBtn.style.cursor = "pointer";
+exportCSVBtn.style.marginBottom = "5px";
+exportSection.appendChild(exportCSVBtn);
+
+// Export GeoJSON button
+const exportGeoJSONBtn = document.createElement("button");
+exportGeoJSONBtn.textContent = "Export GeoJSON";
+exportGeoJSONBtn.style.cursor = "pointer";
+exportSection.appendChild(exportGeoJSONBtn);
+
+toolbar.appendChild(exportSection);
+
+// ── Wire up Color Map radios ──
+document.querySelectorAll('input[name="colorBy"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        activeColorField = radio.value;
+        refreshMapColors();
+    });
+});
+
+// ── Wire up Tooltip checkboxes ──
+const checkboxes = document.querySelectorAll('#toolbar input[type="checkbox"]:not(#selectAll)');
+const selectAll = document.getElementById("selectAll");
+
+checkboxes.forEach(cb => {
+    cb.addEventListener('change', () => {
+        if (cb.checked) selectedFields.add(cb.value);
+        else selectedFields.delete(cb.value);
+        selectAll.checked = [...checkboxes].every(c => c.checked);
+    });
+});
+
+selectAll.addEventListener('change', () => {
+    checkboxes.forEach(cb => {
+        cb.checked = selectAll.checked;
+        if (selectAll.checked) selectedFields.add(cb.value);
+        else selectedFields.delete(cb.value);
+    });
+});
+
+// ── Wire up GeoJSON radios ──
+document.querySelectorAll('input[name="geojsonFile"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+        loadGeoJSON(radio.value);
+    });
+});
+
+// ── Wire up Export Buttons ──
+exportCSVBtn.addEventListener("click", () => {
+    if (!geojson) return;
+    const selected = Array.from(selectedFields);
+    if (selected.length === 0) { alert("No fields selected"); return; }
+
+    const rows = geojson.toGeoJSON().features.map(f => {
+        const row = { id: f.properties.GEOID20 || f.properties.BoroName || "" };
+        selected.forEach(field => row[field] = f.properties[field]);
+        return row;
+    });
+
+    const csvContent = [Object.keys(rows[0]).join(","), ...rows.map(r => Object.values(r).join(","))].join("\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "export.csv";
+    link.click();
+});
+
+exportGeoJSONBtn.addEventListener("click", () => {
+    if (!geojson) return;
+    const selected = Array.from(selectedFields);
+    const features = geojson.toGeoJSON().features.map(f => {
+        const props = { id: f.properties.GEOID20 || f.properties.BoroName || "" };
+        selected.forEach(field => props[field] = f.properties[field]);
+        return { type: "Feature", geometry: f.geometry, properties: props };
+    });
+    const geojsonData = JSON.stringify({ type: "FeatureCollection", features: features });
+    const blob = new Blob([geojsonData], { type: "application/json;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "export.geojson";
+    link.click();
+});
+
+/*
+// ── Toolbar setup ─────────────────────────────────────────────────────────────
+const toolbar = document.getElementById("toolbar");
+
 // ── Color-by selector ──
 const colorBySection = document.createElement("div");
 colorBySection.className = "toolbar-section";
@@ -338,3 +510,4 @@ document.querySelectorAll('input[name="geojsonFile"]').forEach(radio => {
 });
 
 loadGeoJSON('../datasets/final-usables/merged_nyc_county.geojson');
+*/
