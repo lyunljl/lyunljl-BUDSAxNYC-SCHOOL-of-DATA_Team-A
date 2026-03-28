@@ -302,6 +302,11 @@ selectAll.addEventListener('change', () => {
     });
 });
 
+// Divider
+const divider2 = document.createElement("div");
+divider2.className = "toolbar-divider";
+toolbar.appendChild(divider2);
+
 // ── GeoJSON selector ──
 const geojsonSection = document.createElement("div");
 geojsonSection.className = "toolbar-section";
